@@ -9,6 +9,7 @@ type Blog struct {
   type User struct {
 	ID           uint     `gorm:"primaryKey;autoIncrement"`
 	Email        string   `gorm:"unique;size:255;not null"`  
-	Password     string   `gorm:"not null"`
+	Password    string   `gorm:"not null"`
+	Role        string
 	Blogs        []Blog
   }

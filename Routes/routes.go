@@ -2,26 +2,42 @@ package Routes
 
 import (
 	"fmt"
+
 	"strconv"
+	// "github.com/supabase-community/supabase-go"
+	"example.com/blog/middlewares"
 	"example.com/blog/models"
 	"github.com/gin-gonic/gin"
+	"github.com/supabase-community/auth-go"
+	"github.com/supabase-community/auth-go/types"
 	"gorm.io/gorm"
 )
-func InitializeRoutes(router *gin.Engine, db *gorm.DB) {
-	router.POST("/signin", func(c *gin.Context) { SigninUser(c, db) })
-	router.POST("/login", func(c *gin.Context) { LoginUser(c, db) })
-	router.POST("/addBlog", func(c *gin.Context) { CreateBlog(c, db) })
+func InitializeRoutes(router *gin.Engine, db *gorm.DB,client  auth.Client) {
+	router.POST("/signin", func(c *gin.Context) { SignupUser(c, db,client) })
+	router.POST("/login", func(c *gin.Context) { LoginUser(c, db,client) })
+	router.POST("/addBlog",middlewares.AuthMiddleware(), func(c *gin.Context) { CreateBlog(c, db) })
 	router.GET("/getBlogs/:id", func(c *gin.Context) { GetBlogs(c, db) })
-	router.DELETE("/deleteBlog/:id/:blogId", func(c *gin.Context) { DeleteBlog(c, db) })
-	router.PUT("/updateBlog/:id/:blogId", func(c *gin.Context) { UpdateBlog(c, db) })
+	router.DELETE("/deleteBlog/:id/:blogId",middlewares.AuthMiddleware(), func(c *gin.Context) { DeleteBlog(c, db) })
+	router.PUT("/updateBlog/:id/:blogId",middlewares.AuthMiddleware(),func(c *gin.Context) { UpdateBlog(c, db) })
 }
 func CreateBlog(c *gin.Context,db *gorm.DB) {
+	if userRole, exists := c.Get("user_role"); exists {
+        if role, ok := userRole.(string); ok {
+            if role != "Admin"{
+				c.JSON(401, gin.H{"message": "unAuthorized"})
+			}
+			return;
+        } 
+    } else {
+        c.JSON(404, gin.H{"error": "Role not found"})
+    }
 	var body struct{
 		Title   string
 		Content string
 		UserId  int
 	}
 	c.Bind(&body);
+	
 	user := models.Blog{Title:body.Title,Content:body.Content,UserId:uint(body.UserId)}
     result := db.Create(&user) 
 	if result.Error != nil {
@@ -32,12 +48,40 @@ func CreateBlog(c *gin.Context,db *gorm.DB) {
 		"message":"Blog added successfully",
 	})
 }
-func SigninUser(c *gin.Context,db *gorm.DB) {
+func SignupUser(c *gin.Context,db *gorm.DB,client auth.Client) {
     var body struct{
 		Email   string
 		Password string
+		Role     string
 	}
 	c.Bind(&body);
+	tokenRequest := types.SignupRequest{
+        Email:body.Email,
+		Phone:"",      
+	    Password:body.Password,
+		Data: map[string]interface{}{
+			"role":body.Role,
+		},
+		
+    }
+    res,err:=client.Signup(tokenRequest);
+	if err != nil {
+		c.JSON(200, gin.H{
+			"messsage":err.Error(),
+		})
+		return;
+	
+	}
+    if res == nil {
+		fmt.Println("res is nill");
+		return
+	}
+	token := res.AccessToken
+	if err !=nil{
+		c.JSON(400, gin.H{
+			"messsage":err.Error(),
+		})
+	}
 	var storeuser models.User
 	result := db.Where("email = ?", body.Email).First(&storeuser)
 	if result.Error == nil {
@@ -46,17 +90,18 @@ func SigninUser(c *gin.Context,db *gorm.DB) {
 		})
 		return
 	}
-	user := models.User{Email:body.Email,Password:body.Password}
+	user := models.User{Email:body.Email,Password:body.Password,Role:body.Role}
     result1 := db.Create(&user) 
 	if result1.Error != nil {
 		c.JSON(500, gin.H{"error": "Failed to create user"})
 		return
 	}
 	c.JSON(200, gin.H{
+		"Token":token,
 		"message": "signinsuccessfully",
 	})
 }
-func LoginUser(c *gin.Context,db *gorm.DB) {
+func LoginUser(c *gin.Context,db *gorm.DB,client auth.Client) {
 	var body struct{
 		Email    string
 		Password string
@@ -67,16 +112,24 @@ func LoginUser(c *gin.Context,db *gorm.DB) {
         })
         return
     }
-	var storeuser models.User
-	result :=db.Where("email = ? AND password = ?",body.Email,body.Password).First(&storeuser);
-	if result.Error != nil{
-		c.JSON(400,gin.H{
-			"message":"Login failed",
-		})
-		return;
+	res,err:=client.SignInWithEmailPassword(body.Email,body.Password);
+	if err ==nil{
+		c.JSON(200, gin.H{
+            "message": "Login successful",
+			"token":res.AccessToken,
+        })
+        return
 	}
-	c.JSON(200,gin.H{
-		"message":"Login successful",
+	// var storeuser models.User
+	// result :=db.Where("email = ? AND password = ?",body.Email,body.Password).First(&storeuser);
+	// if result.Error != nil{
+	// 	c.JSON(400,gin.H{
+	// 		"message":"Login failed",
+	// 	})
+	// 	return;
+	// }
+	c.JSON(401,gin.H{
+		"message":"Login unsuccessful",
 	})
 	
 }
@@ -102,6 +155,16 @@ func GetBlogs(c *gin.Context,db *gorm.DB) {
 	})
 }
 func DeleteBlog(c *gin.Context,db *gorm.DB) {
+	if userRole, exists := c.Get("user_role"); exists {
+        if role, ok := userRole.(string); ok {
+            if role != "Admin"{
+				c.JSON(401, gin.H{"message": "unAuthorized"})
+			}
+			return;
+        } 
+    } else {
+        c.JSON(404, gin.H{"error": "Role not found"})
+    }
 	id:=c.Param("id");
 	blogId := c.Param("blogId")
 	parsedId,err:=strconv.Atoi(id);
@@ -134,6 +197,16 @@ func DeleteBlog(c *gin.Context,db *gorm.DB) {
 	
 }
 func UpdateBlog(c *gin.Context,db *gorm.DB) {
+	if userRole, exists := c.Get("user_role"); exists {
+        if role, ok := userRole.(string); ok {
+            if role != "Admin"{
+				c.JSON(401, gin.H{"message": "unAuthorized"})
+			}
+			return;
+        } 
+    } else {
+        c.JSON(404, gin.H{"error": "Role not found"})
+    }
 	var body struct{
 		Title    string
 		Content  string
