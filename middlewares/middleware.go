@@ -52,35 +52,11 @@ func AuthMiddleware() gin.HandlerFunc {
         c.Next()
     }
 }
-
-
-	// return func(c *gin.Context) {
-	// 	authHeader := c.GetHeader("Authorization")
-	// 	if authHeader == "" {
-	// 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
-	// 		c.Abort()
-	// 		return
-	// 	}
-	// 	obtainedtoken := strings.TrimPrefix(authHeader, "Bearer ")
-	// 	token, err := jwt.Parse(obtainedtoken, func(token *jwt.Token) (interface{}, error) {
-	// 		// Don't forget to validate the alg is what you expect:
-	// 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-	// 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-	// 		}
-	// 		publicKey, err := jwt.ParseRSAPublicKeyFromPEM([]byte(os.Getenv("supabaseSecret")))
-	// 		if err != nil {
-	// 			return nil, fmt.Errorf("failed to parse public key: %v", err)
-	// 		}
-
-	// 		return publicKey, nil
-	// 	})
-	// 	if err != nil {
-	// 		c.JSON(http.StatusUnauthorized, gin.H{"error": fmt.Sprintf("Invalid token: %v", err)})
-	// 		c.Abort()
-	// 		return
-	// 	}
-	
-	// 	c.Next()
-	// }
-// }
-
+func CheckRole(c *gin.Context, requiredRole string) bool {
+    if userRole, exists := c.Get("user_role"); exists {
+        if role, ok := userRole.(string); ok && role == requiredRole {
+            return true
+        }
+    }
+    return false
+}

@@ -21,16 +21,10 @@ func InitializeRoutes(router *gin.Engine, db *gorm.DB,client  auth.Client) {
 	router.PUT("/updateBlog/:id/:blogId",middlewares.AuthMiddleware(),func(c *gin.Context) { UpdateBlog(c, db) })
 }
 func CreateBlog(c *gin.Context,db *gorm.DB) {
-	if userRole, exists := c.Get("user_role"); exists {
-        if role, ok := userRole.(string); ok {
-            if role != "Admin"{
-				c.JSON(401, gin.H{"message": "unAuthorized"})
-			}
-			return;
-        } 
-    } else {
-        c.JSON(404, gin.H{"error": "Role not found"})
-    }
+	role := middlewares.CheckRole(c,"Admin")
+	if role{
+		c.JSON(401, gin.H{"message": "unAuthorized"})
+	}
 	var body struct{
 		Title   string
 		Content string
@@ -155,16 +149,10 @@ func GetBlogs(c *gin.Context,db *gorm.DB) {
 	})
 }
 func DeleteBlog(c *gin.Context,db *gorm.DB) {
-	if userRole, exists := c.Get("user_role"); exists {
-        if role, ok := userRole.(string); ok {
-            if role != "Admin"{
-				c.JSON(401, gin.H{"message": "unAuthorized"})
-			}
-			return;
-        } 
-    } else {
-        c.JSON(404, gin.H{"error": "Role not found"})
-    }
+	role := middlewares.CheckRole(c,"Admin")
+	if role{
+		c.JSON(401, gin.H{"message": "unAuthorized"})
+	}
 	id:=c.Param("id");
 	blogId := c.Param("blogId")
 	parsedId,err:=strconv.Atoi(id);
@@ -197,16 +185,10 @@ func DeleteBlog(c *gin.Context,db *gorm.DB) {
 	
 }
 func UpdateBlog(c *gin.Context,db *gorm.DB) {
-	if userRole, exists := c.Get("user_role"); exists {
-        if role, ok := userRole.(string); ok {
-            if role != "Admin"{
-				c.JSON(401, gin.H{"message": "unAuthorized"})
-			}
-			return;
-        } 
-    } else {
-        c.JSON(404, gin.H{"error": "Role not found"})
-    }
+	role := middlewares.CheckRole(c,"Admin")
+	if role{
+		c.JSON(401, gin.H{"message": "unAuthorized"})
+	}
 	var body struct{
 		Title    string
 		Content  string
